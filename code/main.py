@@ -1,5 +1,5 @@
 from __future__ import print_function
-import torch.backends.cudnn as cudnn
+# import torch.backends.cudnn as cudnn
 import torch
 import torchvision.transforms as transforms
 
@@ -9,17 +9,15 @@ import random
 import sys
 import pprint
 import datetime
-import dateutil
+# import dateutil
 import dateutil.tz
-
+from miscc.datasets import TextDataset
+from miscc.config import cfg, cfg_from_file
+# from miscc.utils import mkdir_p
+from trainer import GANTrainer
 
 dir_path = (os.path.abspath(os.path.join(os.path.realpath(__file__), './.')))
 sys.path.append(dir_path)
-
-from miscc.datasets import TextDataset
-from miscc.config import cfg, cfg_from_file
-from miscc.utils import mkdir_p
-from trainer import GANTrainer
 
 
 def parse_args():
@@ -30,8 +28,9 @@ def parse_args():
     parser.add_argument('--gpu',  dest='gpu_id', type=str, default='0')
     parser.add_argument('--data_dir', dest='data_dir', type=str, default='')
     parser.add_argument('--manualSeed', type=int, help='manual seed')
-    args = parser.parse_args()
-    return args
+    cmd_args = parser.parse_args()
+    return cmd_args
+
 
 if __name__ == "__main__":
     args = parse_args()
@@ -72,6 +71,6 @@ if __name__ == "__main__":
         algo = GANTrainer(output_dir)
         algo.train(dataloader, cfg.STAGE)
     else:
-        datapath= '%s/test/val_captions.t7' % (cfg.DATA_DIR)
+        datapath = '%s/test/val_captions.t7' % cfg.DATA_DIR
         algo = GANTrainer(output_dir)
         algo.sample(datapath, cfg.STAGE)

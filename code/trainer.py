@@ -21,7 +21,7 @@ from miscc.utils import KL_loss
 from miscc.utils import compute_discriminator_loss, compute_generator_loss
 
 from tensorboard import summary
-from tensorboard import FileWriter
+from tensorflow.summary import FileWriter
 
 
 class GANTrainer(object):
@@ -76,24 +76,24 @@ class GANTrainer(object):
     def load_network_stageII(self):
         from model import STAGE1_G, STAGE2_G, STAGE2_D
 
-        Stage1_G = STAGE1_G()
-        netG = STAGE2_G(Stage1_G)
-        netG.apply(weights_init)
-        print(netG)
+        stage1__generator = STAGE1_G()
+        net_generator = STAGE2_G(stage1__generator)
+        net_generator.apply(weights_init)
+        print(net_generator)
         if cfg.NET_G != '':
             state_dict = \
                 torch.load(cfg.NET_G,
                            map_location=lambda storage, loc: storage)
-            netG.load_state_dict(state_dict)
+            net_generator.load_state_dict(state_dict)
             print('Load from: ', cfg.NET_G)
         elif cfg.STAGE1_G != '':
             state_dict = \
                 torch.load(cfg.STAGE1_G,
                            map_location=lambda storage, loc: storage)
-            netG.STAGE1_G.load_state_dict(state_dict)
+            net_generator.STAGE1_G.load_state_dict(state_dict)
             print('Load from: ', cfg.STAGE1_G)
         else:
-            print("Please give the Stage1_G path")
+            print("Please give the stage1__generator path")
             return
 
         netD = STAGE2_D()
@@ -107,15 +107,15 @@ class GANTrainer(object):
         print(netD)
 
         if cfg.CUDA:
-            netG.cuda()
+            net_generator.cuda()
             netD.cuda()
-        return netG, netD
+        return net_generator, netD
 
     def train(self, data_loader, stage=1):
         if stage == 1:
-            netG, netD = self.load_network_stageI()
+            net_generator, net_discriminator = self.load_network_stageI()
         else:
-            netG, netD = self.load_network_stageII()
+            net_generator, net_discriminator = self.load_network_stageII()
 
         nz = cfg.Z_DIM
         batch_size = self.batch_size
@@ -133,10 +133,10 @@ class GANTrainer(object):
         discriminator_lr = cfg.TRAIN.DISCRIMINATOR_LR
         lr_decay_step = cfg.TRAIN.LR_DECAY_EPOCH
         optimizerD = \
-            optim.Adam(netD.parameters(),
+            optim.Adam(net_discriminator.parameters(),
                        lr=cfg.TRAIN.DISCRIMINATOR_LR, betas=(0.5, 0.999))
         netG_para = []
-        for p in netG.parameters():
+        for p in net_generator.parameters():
             if p.requires_grad:
                 netG_para.append(p)
         optimizerG = optim.Adam(netG_para,
@@ -170,14 +170,14 @@ class GANTrainer(object):
                 noise.data.normal_(0, 1)
                 inputs = (txt_embedding, noise)
                 _, fake_imgs, mu, logvar = \
-                    nn.parallel.data_parallel(netG, inputs, self.gpus)
+                    nn.parallel.data_parallel(net_generator, inputs, self.gpus)
 
                 ############################
                 # (3) Update D network
                 ###########################
-                netD.zero_grad()
+                net_discriminator.zero_grad()
                 errD, errD_real, errD_wrong, errD_fake = \
-                    compute_discriminator_loss(netD, real_imgs, fake_imgs,
+                    compute_discriminator_loss(net_discriminator, real_imgs, fake_imgs,
                                                real_labels, fake_labels,
                                                mu, self.gpus)
                 errD.backward()
@@ -185,8 +185,8 @@ class GANTrainer(object):
                 ############################
                 # (2) Update G network
                 ###########################
-                netG.zero_grad()
-                errG = compute_generator_loss(netD, fake_imgs,
+                net_generator.zero_grad()
+                errG = compute_generator_loss(net_discriminator, fake_imgs,
                                               real_labels, mu, self.gpus)
                 kl_loss = KL_loss(mu, logvar)
                 errG_total = errG + kl_loss * cfg.TRAIN.COEFF.KL
@@ -202,17 +202,19 @@ class GANTrainer(object):
                     summary_G = summary.scalar('G_loss', errG.data[0])
                     summary_KL = summary.scalar('KL_loss', kl_loss.data[0])
 
-                    self.summary_writer.add_summary(summary_D, count)
-                    self.summary_writer.add_summary(summary_D_r, count)
-                    self.summary_writer.add_summary(summary_D_w, count)
-                    self.summary_writer.add_summary(summary_D_f, count)
-                    self.summary_writer.add_summary(summary_G, count)
-                    self.summary_writer.add_summary(summary_KL, count)
+                    """
+                    self.summary_writer.add_summary(summary_D, count).eval()
+                    self.summary_writer.add_summary(summary_D_r, count).eval()
+                    self.summary_writer.add_summary(summary_D_w, count).eval()
+                    self.summary_writer.add_summary(summary_D_f, count).eval()
+                    self.summary_writer.add_summary(summary_G, count).eval()
+                    self.summary_writer.add_summary(summary_KL, count).eval()
+                    """
 
                     # save the image result for each epoch
                     inputs = (txt_embedding, fixed_noise)
                     lr_fake, fake, _, _ = \
-                        nn.parallel.data_parallel(netG, inputs, self.gpus)
+                        nn.parallel.data_parallel(net_generator, inputs, self.gpus)
                     save_img_results(real_img_cpu, fake, epoch, self.image_dir)
                     if lr_fake is not None:
                         save_img_results(None, lr_fake, epoch, self.image_dir)
@@ -225,9 +227,9 @@ class GANTrainer(object):
                      errD.data[0], errG.data[0], kl_loss.data[0],
                      errD_real, errD_wrong, errD_fake, (end_t - start_t)))
             if epoch % self.snapshot_interval == 0:
-                save_model(netG, netD, epoch, self.model_dir)
+                save_model(net_generator, net_discriminator, epoch, self.model_dir)
         #
-        save_model(netG, netD, self.max_epoch, self.model_dir)
+        save_model(net_generator, net_discriminator, self.max_epoch, self.model_dir)
         #
         self.summary_writer.close()
 

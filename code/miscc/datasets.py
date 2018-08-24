@@ -14,7 +14,7 @@ import random
 import numpy as np
 import pandas as pd
 
-from miscc.config import cfg
+# from miscc.config import cfg
 
 
 class TextDataset(data.Dataset):
@@ -104,7 +104,7 @@ class TextDataset(data.Dataset):
             embedding_filename = '/skip-thought-embeddings.pickle'
 
         with open(data_dir + embedding_filename, 'rb') as f:
-            embeddings = pickle.load(f)
+            embeddings = pickle.load(f, encoding='latin1')
             embeddings = np.array(embeddings)
             # embedding_shape = [embeddings.shape[-1]]
             print('embeddings: ', embeddings.shape)
@@ -113,7 +113,7 @@ class TextDataset(data.Dataset):
     def load_class_id(self, data_dir, total_num):
         if os.path.isfile(data_dir + '/class_info.pickle'):
             with open(data_dir + '/class_info.pickle', 'rb') as f:
-                class_id = pickle.load(f)
+                class_id = pickle.load(f, encoding='latin1')
         else:
             class_id = np.arange(total_num)
         return class_id
@@ -121,7 +121,7 @@ class TextDataset(data.Dataset):
     def load_filenames(self, data_dir):
         filepath = os.path.join(data_dir, 'filenames.pickle')
         with open(filepath, 'rb') as f:
-            filenames = pickle.load(f)
+            filenames = pickle.load(f, encoding='latin1')
         print('Load filenames from: %s (%d)' % (filepath, len(filenames)))
         return filenames
 
